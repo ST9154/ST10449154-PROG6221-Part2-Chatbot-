@@ -218,7 +218,16 @@ class Program
             }
         }
 
-        
+        // Handle follow-up questions on current topic
+        if (!string.IsNullOrEmpty(currentTopic) &&
+            (lowerInput.Contains("more") || lowerInput.Contains("another") || lowerInput.Contains("else")))
+        {
+            if (keywordResponses.ContainsKey(currentTopic))
+            {
+                int responseIndex = random.Next(keywordResponses[currentTopic].Count);
+                return keywordResponses[currentTopic][responseIndex];
+            }
+        }
 
         // General conversation
         if (lowerInput.Contains("how are you"))
