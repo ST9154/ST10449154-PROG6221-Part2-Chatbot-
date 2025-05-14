@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:  # Enables manual triggering
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: '6.0.x'
@@ -51,25 +51,28 @@ jobs:
     - name: Publish application
       run: dotnet publish -c Release -r ${{ env.RUNTIME_ID }} --self-contained false -o ${{ env.PUBLISH_DIR }}
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
       with:
-        name: chatbot-${{ github.run_number }}
+        name: chatbot-artifacts
         path: |
           ${{ env.PUBLISH_DIR }}/
           welcome.wav
+        retention-days: 5
 
   release:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v3
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
       with:
-        name: chatbot-${{ github.run_number }}
+        name: chatbot-artifacts
+        path: ${{ env.PUBLISH_DIR }}
 
     - name: Create release
+      id: create-release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v1.0.${{ github.run_number }}
@@ -78,13 +81,11 @@ jobs:
           Cybersecurity Awareness Chatbot
           - Version: 1.0.${{ github.run_number }}
           - Build Date: ${{ steps.get-date.outputs.date }}
-          Changes:
-          ${{ github.event.head_commit.message }}
         files: |
           ${{ env.PUBLISH_DIR }}/*.exe
           ${{ env.PUBLISH_DIR }}/*.dll
           ${{ env.PUBLISH_DIR }}/*.json
-          welcome.wav
+          ${{ env.PUBLISH_DIR }}/welcome.wav
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
