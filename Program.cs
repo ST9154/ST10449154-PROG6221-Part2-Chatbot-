@@ -195,6 +195,28 @@ class Program
             }
         }
 
+        // Check for cybersecurity keywords
+        foreach (var topic in keywordResponses)
+        {
+            if (lowerInput.Contains(topic.Key))
+            {
+                // Store user interest for future personalization
+                if (!userPreferences.ContainsKey("interest"))
+                {
+                    userPreferences.Add("interest", topic.Key);
+                }
+                else
+                {
+                    userPreferences["interest"] = topic.Key;
+                }
+
+                currentTopic = topic.Key;
+
+                // Return a random response from the available options
+                int responseIndex = random.Next(topic.Value.Count);
+                return topic.Value[responseIndex];
+            }
+        }
 
         
 
