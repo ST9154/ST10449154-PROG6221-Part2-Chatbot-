@@ -1,92 +1,32 @@
-name: Cybersecurity Chatbot CI/CD
+name: C# CI Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - master
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
-
-env:
-  DOTNET_VERSION: '6.0.x'
-  RUNTIME_ID: 'win10-x64'
-  PUBLISH_DIR: './publish'
+    branches:
+      - master
 
 jobs:
-  validate:
+  build:
     runs-on: windows-latest
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Verify audio file
-      run: |
-        if (-not (Test-Path -Path "welcome.wav")) {
-          Write-Output "::warning::Audio file welcome.wav not found. Default greeting will be used."
-        } else {
-          Write-Output "Audio file verified successfully"
-        }
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
 
-  build-and-publish:
-    needs: validate
-    runs-on: windows-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v1
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore NuGet packages
+        run: nuget restore "ST10449154-PROG6221(Part2 Chatbot).sln"
 
-    - name: Restore dependencies
-      run: dotnet restore
+      - name: Check Code Formatting
+        run: dotnet format --verify-no-changes "ST10449154-PROG6221(Part2 Chatbot).sln" || exit 1
 
-    - name: Build solution
-      run: dotnet build --configuration Release --no-restore
-
-    - name: Run tests
-      run: dotnet test --no-build --verbosity normal
-
-    - name: Publish project
-      run: |
-        dotnet publish -c Release -r ${{ env.RUNTIME_ID }} --self-contained false --no-build -o ${{ env.PUBLISH_DIR }}
-        # Copy audio file to publish directory
-        if (Test-Path -Path "welcome.wav") {
-          Copy-Item -Path "welcome.wav" -Destination ${{ env.PUBLISH_DIR }}
-        }
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: chatbot-package
-        path: ${{ env.PUBLISH_DIR }}
-        retention-days: 5
-
-  release:
-    needs: build-and-publish
-    if: github.ref == 'refs/heads/main'
-    runs-on: windows-latest
-    steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: chatbot-package
-        path: release-package
-
-    - name: Create release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v1.0.${{ github.run_number }}
-        name: Release v1.0.${{ github.run_number }}
-        body: |
-          Cybersecurity Awareness Chatbot
-          - Version: 1.0.${{ github.run_number }}
-          - Build Date: ${{ steps.get-date.outputs.date }}
-        files: release-package/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Get current date
-      id: get-date
-      run: echo "date=$(date)" >> $GITHUB_OUTPUT
+      - name: Build Project
+        run: msbuild "ST10449154-PROG6221(Part2 Chatbot).sln" /p:Configuration=Release
