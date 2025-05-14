@@ -27,7 +27,7 @@ jobs:
           Write-Output "Audio file verified successfully"
         }
 
-  build-and-test:
+  build-and-publish:
     needs: validate
     runs-on: windows-latest
     steps:
@@ -42,37 +42,39 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
-    - name: Build
+    - name: Build solution
       run: dotnet build --configuration Release --no-restore
 
     - name: Run tests
       run: dotnet test --no-build --verbosity normal
 
-    - name: Publish application
-      run: dotnet publish -c Release -r ${{ env.RUNTIME_ID }} --self-contained false -o ${{ env.PUBLISH_DIR }}
+    - name: Publish project
+      run: |
+        dotnet publish -c Release -r ${{ env.RUNTIME_ID }} --self-contained false --no-build -o ${{ env.PUBLISH_DIR }}
+        # Copy audio file to publish directory
+        if (Test-Path -Path "welcome.wav") {
+          Copy-Item -Path "welcome.wav" -Destination ${{ env.PUBLISH_DIR }}
+        }
 
-    - name: Upload build artifacts
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: chatbot-artifacts
-        path: |
-          ${{ env.PUBLISH_DIR }}/
-          welcome.wav
+        name: chatbot-package
+        path: ${{ env.PUBLISH_DIR }}
         retention-days: 5
 
   release:
-    needs: build-and-test
+    needs: build-and-publish
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: chatbot-artifacts
-        path: ${{ env.PUBLISH_DIR }}
+        name: chatbot-package
+        path: release-package
 
     - name: Create release
-      id: create-release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v1.0.${{ github.run_number }}
@@ -81,11 +83,7 @@ jobs:
           Cybersecurity Awareness Chatbot
           - Version: 1.0.${{ github.run_number }}
           - Build Date: ${{ steps.get-date.outputs.date }}
-        files: |
-          ${{ env.PUBLISH_DIR }}/*.exe
-          ${{ env.PUBLISH_DIR }}/*.dll
-          ${{ env.PUBLISH_DIR }}/*.json
-          ${{ env.PUBLISH_DIR }}/welcome.wav
+        files: release-package/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
