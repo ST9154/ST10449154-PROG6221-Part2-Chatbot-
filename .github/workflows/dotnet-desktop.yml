@@ -1,67 +1,43 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-# This workflow will build, test, sign and package a WPF or Windows Forms desktop application
-# built on .NET Core.
-# To learn how to migrate your existing application to .NET Core,
-# refer to https://docs.microsoft.com/en-us/dotnet/desktop-wpf/migration/convert-project-from-net-framework
-#
-# To configure this workflow:
-#
-# 1. Configure environment variables
-# GitHub sets default environment variables for every workflow run.
-# Replace the variables relative to your project in the "env" section below.
-#
-# 2. Signing
-# Generate a signing certificate in the Windows Application
-# Packaging Project or add an existing signing certificate to the project.
-# Next, use PowerShell to encode the .pfx file using Base64 encoding
-# by running the following Powershell script to generate the output string:
-#
-# $pfx_cert = Get-Content '.\SigningCertificate.pfx' -Encoding Byte
-# [System.Convert]::ToBase64String($pfx_cert) | Out-File 'SigningCertificate_Encoded.txt'
-#
-# Open the output file, SigningCertificate_Encoded.txt, and copy the
-# string inside. Then, add the string to the repo as a GitHub secret
-# and name it "Base64_Encoded_Pfx."
-# For more information on how to configure your signing certificate for
-# this workflow, refer to https://github.com/microsoft/github-actions-for-desktop-apps#signing
-#
-# Finally, add the signing certificate password to the repo as a secret and name it "Pfx_Key".
-# See "Build the Windows Application Packaging project" below to see how the secret is used.
-#
-# For more information on GitHub Actions, refer to https://github.com/features/actions
-# For a complete CI/CD sample to get started with GitHub Action workflows for Desktop Applications,
-# refer to https://github.com/microsoft/github-actions-for-desktop-apps
-
-name: .NET Core Desktop
+name: Cybersecurity Chatbot CI/CD
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:  # Enables manual triggering
+
+env:
+  DOTNET_VERSION: '6.0.x'
+  RUNTIME_ID: 'win10-x64'
+  PUBLISH_DIR: './publish'
 
 jobs:
-  build-and-test:
-    runs-on: windows-latest  # Required for System.Media.SoundPlayer
-
+  validate:
+    runs-on: windows-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
+    - name: Verify audio file
+      run: |
+        if (-not (Test-Path -Path "welcome.wav")) {
+          Write-Output "::warning::Audio file welcome.wav not found. Default greeting will be used."
+        } else {
+          Write-Output "Audio file verified successfully"
+        }
+
+  build-and-test:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: '6.0.x'  # Or your target version
-
-    - name: Verify audio file exists
-      run: |
-        if (-not (Test-Path -Path "welcome.wav")) {
-          Write-Output "::warning file=welcome.wav::Audio file not found. Default greeting will be used."
-        }
+        dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Restore dependencies
       run: dotnet restore
@@ -73,36 +49,45 @@ jobs:
       run: dotnet test --no-build --verbosity normal
 
     - name: Publish application
-      run: dotnet publish -c Release -r win10-x64 --self-contained false -o ./publish
+      run: dotnet publish -c Release -r ${{ env.RUNTIME_ID }} --self-contained false -o ${{ env.PUBLISH_DIR }}
 
-    - name: Create release artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: cybersecurity-chatbot
+        name: chatbot-${{ github.run_number }}
         path: |
-          ./publish/
-          ./welcome.wav
-        if-no-files-found: error
+          ${{ env.PUBLISH_DIR }}/
+          welcome.wav
 
   release:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
-    
     steps:
     - name: Download artifact
       uses: actions/download-artifact@v3
       with:
-        name: cybersecurity-chatbot
+        name: chatbot-${{ github.run_number }}
 
     - name: Create release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: Release v1.0.${{ github.run_number }}
+        body: |
+          Cybersecurity Awareness Chatbot
+          - Version: 1.0.${{ github.run_number }}
+          - Build Date: ${{ steps.get-date.outputs.date }}
+          Changes:
+          ${{ github.event.head_commit.message }}
         files: |
-          publish/*.exe
-          publish/*.dll
-          publish/*.json
+          ${{ env.PUBLISH_DIR }}/*.exe
+          ${{ env.PUBLISH_DIR }}/*.dll
+          ${{ env.PUBLISH_DIR }}/*.json
           welcome.wav
-        body: "Cybersecurity Awareness Chatbot - Windows Desktop Application"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get current date
+      id: get-date
+      run: echo "date=$(date)" >> $GITHUB_OUTPUT
