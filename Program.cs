@@ -186,7 +186,14 @@ class Program
     {
         string lowerInput = input.ToLower();
 
-        
+        // Check for sentiment keywords first
+        foreach (var sentiment in sentimentResponses)
+        {
+            if (lowerInput.Contains(sentiment.Key))
+            {
+                return sentiment.Value;
+            }
+        }
 
 
         
